@@ -34,6 +34,24 @@ class Storage:
             return True
         return False
 
+    def edit_note(self, note_id: str, title: str = None, content: str = None) -> bool:
+        notes = self.get_all_notes()
+        updated = False
+
+        for note in notes:
+            if note.id == note_id:
+                if title:
+                    note.title = title
+                if content:
+                    note.content = content
+                updated = True
+                break
+
+        if updated:
+            self._save_notes(notes)
+            return True
+        return False
+
     def _save_notes(self, notes: List[Note]):
         data = [n.to_dict() for n in notes]
         with open(self.filename, 'w', encoding='utf-8') as f:
