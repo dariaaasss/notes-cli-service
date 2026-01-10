@@ -64,7 +64,7 @@ def main():
             print(f"✏️  Note {args.id} updated successfully.")
         else:
             print(f"❌ Note with ID {args.id} not found.")
-            sys.exit(1)git add .
+            sys.exit(1)
 
     else:
         parser.print_help()
