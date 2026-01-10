@@ -13,6 +13,12 @@ def main():
     add_parser.add_argument("--title", required=True, help="Title of the note")
     add_parser.add_argument("--msg", required=True, help="Content of the note")
 
+    # Command: edit
+    edit_parser = subparsers.add_parser("edit", help="Edit a note")
+    edit_parser.add_argument("--id", required=True, help="ID of the note to edit")
+    edit_parser.add_argument("--title", help="New title")
+    edit_parser.add_argument("--msg", help="New content")
+
     # Command: list
     subparsers.add_parser("list", help="List all notes")
 
@@ -47,6 +53,18 @@ def main():
         else:
             print(f"❌ Note with ID {args.id} not found.")
             sys.exit(1)
+
+    elif args.command == "edit":
+        if not args.title and not args.msg:
+            print("⚠️  You must provide either --title or --msg to update.")
+            sys.exit(1)
+
+        success = storage.edit_note(args.id, args.title, args.msg)
+        if success:
+            print(f"✏️  Note {args.id} updated successfully.")
+        else:
+            print(f"❌ Note with ID {args.id} not found.")
+            sys.exit(1)git add .
 
     else:
         parser.print_help()
