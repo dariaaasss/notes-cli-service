@@ -52,6 +52,14 @@ class Storage:
             return True
         return False
 
+    def filter_notes(self, query: str) -> List[Note]:
+        notes = self.get_all_notes()
+        query = query.lower()
+        return [
+            note for note in notes
+            if query in note.title.lower() or query in note.content.lower()
+        ]
+
     def _save_notes(self, notes: List[Note]):
         data = [n.to_dict() for n in notes]
         with open(self.filename, 'w', encoding='utf-8') as f:

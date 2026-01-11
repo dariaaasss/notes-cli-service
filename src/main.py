@@ -20,7 +20,8 @@ def main():
     edit_parser.add_argument("--msg", help="New content")
 
     # Command: list
-    subparsers.add_parser("list", help="List all notes")
+    list_parser = subparsers.add_parser("list", help="List all notes")
+    list_parser.add_argument("--query", "-q", help="Filter notes by keyword")
 
     # Command: delete
     del_parser = subparsers.add_parser("delete", help="Delete a note by ID")
@@ -35,7 +36,12 @@ def main():
         print(f"✅ Note added successfully! ID: {note.id}")
 
     elif args.command == "list":
-        notes = storage.get_all_notes()
+        if args.query:
+            notes = storage.filter_notes(args.query)
+            print(f"🔍 Search results for '{args.query}':")
+        else:
+            notes = storage.get_all_notes()
+
         if not notes:
             print("📭 No notes found.")
         else:
