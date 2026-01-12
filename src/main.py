@@ -1,148 +1,94 @@
 import argparse
 import sys
 import questionary
-from rich.console import Console
-from rich.table import Table
 from rich.prompt import Prompt
-from rich import box
-from src.storage import Storage
-from src.models import Note
+from src.handlers import (
+    console, storage, 
+    handle_add, handle_list, handle_edit, handle_delete
+)
 
-console = Console()
+def run_interactive_mode():
+    """Бесконечный цикл работы приложения."""
+    while True:
+        console.clear()
+        console.rule("[bold blue]Notes CLI Service[/bold blue]")
+        
 
-def print_notes_table(notes):
-    """Выводит таблицу заметок."""
-    if not notes:
-        console.print("[yellow]📭 Заметок пока нет.[/yellow]")
-        return
+        action = questionary.select(
+            "Что вы хотите сделать?",
+            choices=[
+                questionary.Choice("📜 Показать все", value="list"),
+                questionary.Choice("🔍 Поиск", value="search"),
+                questionary.Choice("➕ Добавить новую", value="add"),
+                questionary.Choice("✏️ Редактировать", value="edit"),
+                questionary.Choice("🗑️ Удалить", value="delete"),
+                questionary.Choice("🚪 Выход", value="exit"),
+            ]
+        ).ask()
 
-    table = Table(title=f"Мои Заметки ({len(notes)})", box=box.ROUNDED)
-    table.add_column("ID", style="cyan", no_wrap=True)
-    table.add_column("Дата", style="magenta")
-    table.add_column("Заголовок", style="green")
-    table.add_column("Содержание")
-
-    for note in notes:
-
-        table.add_row(note.id[:8], note.created_at[:10], note.title, note.content)
-    
-    console.print(table)
-
-def select_note_interactive(notes):
-    """Показывает интерактивное меню для выбора заметки."""
-    if not notes:
-        return None
-    
-    choices = []
-    for note in notes:
-        display_text = f"{note.title} | {note.content[:20]}..."
-        choices.append(questionary.Choice(title=display_text, value=note.id))
-    
-    selected_id = questionary.select(
-        "Выберите заметку:",
-        choices=choices
-    ).ask()
-    
-    return selected_id
+        if action == "exit":
+            console.print("[bold blue]До свидания! 👋[/bold blue]")
+            sys.exit(0)
+        
+        elif action == "list":
+            handle_list()
+        
+        elif action == "search":
+            query = Prompt.ask("Введите текст для поиска")
+            handle_list(query) 
+        
+        elif action == "add":
+            handle_add()
+        
+        elif action == "edit":
+            handle_edit()
+        
+        elif action == "delete":
+            handle_delete()
+        
+        # Пауза, чтобы пользователь увидел результат перед очисткой
+        print()
+        Prompt.ask("[dim]Нажмите Enter, чтобы продолжить...[/dim]")
 
 def main():
     parser = argparse.ArgumentParser(description="CLI Сервис Заметок")
     subparsers = parser.add_subparsers(dest="command", help="Команды")
 
-    # --- ADD ---
+    # Настройка аргументов
     add_parser = subparsers.add_parser("add", help="Создать заметку")
-    add_parser.add_argument("--title", help="Заголовок")
-    add_parser.add_argument("--msg", help="Текст заметки")
+    add_parser.add_argument("--title")
+    add_parser.add_argument("--msg")
 
-    # --- LIST ---
     list_parser = subparsers.add_parser("list", help="Список заметок")
-    list_parser.add_argument("--query", "-q", help="Поиск по тексту")
+    list_parser.add_argument("--query", "-q")
 
-    # --- EDIT ---
     edit_parser = subparsers.add_parser("edit", help="Редактировать заметку")
-    edit_parser.add_argument("--id", help="ID заметки (необязательно в интерактивном режиме)")
-    edit_parser.add_argument("--title", help="Новый заголовок")
-    edit_parser.add_argument("--msg", help="Новый текст")
+    edit_parser.add_argument("--id")
+    edit_parser.add_argument("--title")
+    edit_parser.add_argument("--msg")
 
-    # --- DELETE ---
     del_parser = subparsers.add_parser("delete", help="Удалить заметку")
-    del_parser.add_argument("--id", help="ID заметки (необязательно в интерактивном режиме)")
+    del_parser.add_argument("--id")
 
+    # Интерактивный режим
+    if len(sys.argv) == 1:
+        try:
+            run_interactive_mode()
+        except KeyboardInterrupt:
+            console.print("\n[bold blue]Выход...[/bold blue]")
+            sys.exit(0)
+    
+    # Обычный режим (CLI флаги)
     args = parser.parse_args()
-    storage = Storage()
-
-
 
     if args.command == "add":
-        # Если аргументы не переданы, спрашиваем интерактивно
-        title = args.title or Prompt.ask("[bold green]Введите заголовок[/bold green]")
-        content = args.msg or Prompt.ask("[bold green]Введите содержание[/bold green]")
-        
-        note = Note(title=title, content=content)
-        storage.add_note(note)
-        console.print(f"[bold blue]✅ Заметка сохранена![/bold blue] (ID: {note.id[:8]})")
-
+        handle_add(args.title, args.msg)
     elif args.command == "list":
-        if args.query:
-            notes = storage.filter_notes(args.query)
-            console.print(f"[bold blue]🔍 Результаты поиска по запросу '{args.query}':[/bold blue]")
-        else:
-            notes = storage.get_all_notes()
-        
-        print_notes_table(notes)
-
+        handle_list(args.query)
     elif args.command == "edit":
-        # Если ID нет, даем выбрать из списка
-        if not args.id:
-            notes = storage.get_all_notes()
-            if not notes:
-                console.print("[yellow]📭 Нет заметок для редактирования.[/yellow]")
-                sys.exit(0)
-            
-            args.id = select_note_interactive(notes)
-            if not args.id: # Если пользователь отменил выбор
-                return
-
-        note = storage.get_note_by_id(args.id)
-        if not note:
-            console.print(f"[bold red]❌ Заметка с ID {args.id} не найдена.[/bold red]")
-            sys.exit(1)
-
-        new_title = args.title
-        new_content = args.msg
-
-        # Если данные для обновления не переданы, спрашиваем, подставляя старые значения
-        if not new_title and not new_content:
-            console.print(f"[dim]Редактирование: {note.title}[/dim]")
-            new_title = Prompt.ask("Заголовок", default=note.title)
-            new_content = Prompt.ask("Содержание", default=note.content)
-
-        success = storage.edit_note(args.id, new_title, new_content)
-        if success:
-            console.print(f"[bold green]✏️  Заметка обновлена![/bold green]")
-
+        handle_edit(args.id, args.title, args.msg)
     elif args.command == "delete":
-        # Если ID нет, даем выбрать
-        if not args.id:
-            notes = storage.get_all_notes()
-            if not notes:
-                console.print("[yellow]📭 Нет заметок для удаления.[/yellow]")
-                sys.exit(0)
-
-            args.id = select_note_interactive(notes)
-            if not args.id:
-                return
-
-        # Подтверждение удаления
-        if questionary.confirm(f"Вы уверены, что хотите удалить заметку {args.id[:8]}?").ask():
-            success = storage.delete_note(args.id)
-            if success:
-                console.print(f"[bold red]🗑️  Заметка удалена.[/bold red]")
-            else:
-                console.print(f"[bold red]❌ Ошибка: заметка не найдена.[/bold red]")
-        else:
-            console.print("[dim]Удаление отменено.[/dim]")
-
+        handle_delete(args.id)
     else:
         parser.print_help()
 
