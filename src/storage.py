@@ -1,6 +1,6 @@
 import json
 import os
-from typing import List
+from typing import List, Optional
 from src.models import Note
 
 
@@ -64,3 +64,11 @@ class Storage:
         data = [n.to_dict() for n in notes]
         with open(self.filename, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=4, ensure_ascii=False)
+
+    def get_note_by_id(self, note_id: str) -> Optional[Note]:
+        """Find a note by ID and return it, or None."""
+        notes = self.get_all_notes()
+        for note in notes:
+            if note.id == note_id:
+                return note
+        return None
