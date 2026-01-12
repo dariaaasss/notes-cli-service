@@ -16,7 +16,7 @@
 
 ```bash
 # Клонирование репозитория
-git clone https://github.com/your-username/notes-cli.git
+git clone https://github.com/dariaaasss/notes-cli-service.git
 cd notes-cli
 
 # Создание виртуального окружения
