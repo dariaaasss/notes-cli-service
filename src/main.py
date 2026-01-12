@@ -1,5 +1,6 @@
 import argparse
 import sys
+import questionary
 from rich.console import Console
 from rich.table import Table
 from rich.prompt import Prompt
@@ -7,14 +8,12 @@ from rich import box
 from src.storage import Storage
 from src.models import Note
 
-# Инициализация Rich консоли
 console = Console()
 
-
 def print_notes_table(notes):
-    """Helper function to print notes in a nice table."""
+    """Выводит таблицу заметок."""
     if not notes:
-        console.print("[yellow]📭 Заметок не найдено.[/yellow]")
+        console.print("[yellow]📭 Заметок пока нет.[/yellow]")
         return
 
     table = Table(title=f"Мои Заметки ({len(notes)})", box=box.ROUNDED)
@@ -24,65 +23,87 @@ def print_notes_table(notes):
     table.add_column("Содержание")
 
     for note in notes:
-        # Обрезаем ID и дату для красоты
-        table.add_row(note.id[:8], note.created_at[:10], note.title, note.content)
 
+        table.add_row(note.id[:8], note.created_at[:10], note.title, note.content)
+    
     console.print(table)
 
+def select_note_interactive(notes):
+    """Показывает интерактивное меню для выбора заметки."""
+    if not notes:
+        return None
+    
+    choices = []
+    for note in notes:
+        display_text = f"{note.title} | {note.content[:20]}..."
+        choices.append(questionary.Choice(title=display_text, value=note.id))
+    
+    selected_id = questionary.select(
+        "Выберите заметку:",
+        choices=choices
+    ).ask()
+    
+    return selected_id
 
 def main():
-    parser = argparse.ArgumentParser(description="Сервис CLI для заметок")
-    subparsers = parser.add_subparsers(dest="command", help="Доступные команды")
+    parser = argparse.ArgumentParser(description="CLI Сервис Заметок")
+    subparsers = parser.add_subparsers(dest="command", help="Команды")
 
-    # --- ADD COMMAND ---
-    # Убрали required=True, чтобы можно было запускать интерактивно
-    add_parser = subparsers.add_parser("add", help="Добавить новую заметку")
-    add_parser.add_argument("--title", help="Заголовок заметки")
-    add_parser.add_argument("--msg", help="Содержание заметки")
+    # --- ADD ---
+    add_parser = subparsers.add_parser("add", help="Создать заметку")
+    add_parser.add_argument("--title", help="Заголовок")
+    add_parser.add_argument("--msg", help="Текст заметки")
 
-    # --- LIST COMMAND ---
-    list_parser = subparsers.add_parser("list", help="Вывести все заметки")
-    list_parser.add_argument("--query", "-q", help="Фильтр заметок по ключевому слову")
+    # --- LIST ---
+    list_parser = subparsers.add_parser("list", help="Список заметок")
+    list_parser.add_argument("--query", "-q", help="Поиск по тексту")
 
-    # --- EDIT COMMAND ---
+    # --- EDIT ---
     edit_parser = subparsers.add_parser("edit", help="Редактировать заметку")
-    edit_parser.add_argument("--id", help="ID заметки для редактирования")
+    edit_parser.add_argument("--id", help="ID заметки (необязательно в интерактивном режиме)")
     edit_parser.add_argument("--title", help="Новый заголовок")
-    edit_parser.add_argument("--msg", help="Новое содержание")
+    edit_parser.add_argument("--msg", help="Новый текст")
 
-    # --- DELETE COMMAND ---
-    del_parser = subparsers.add_parser("delete", help="Удалить заметку по ID")
-    del_parser.add_argument("--id", help="ID заметки для удаления")
+    # --- DELETE ---
+    del_parser = subparsers.add_parser("delete", help="Удалить заметку")
+    del_parser.add_argument("--id", help="ID заметки (необязательно в интерактивном режиме)")
 
     args = parser.parse_args()
     storage = Storage()
 
-    # LOGIC
+
+
     if args.command == "add":
-        # Интерактивный режим: если флагов нет, спрашиваем через Prompt
+        # Если аргументы не переданы, спрашиваем интерактивно
         title = args.title or Prompt.ask("[bold green]Введите заголовок[/bold green]")
         content = args.msg or Prompt.ask("[bold green]Введите содержание[/bold green]")
-
+        
         note = Note(title=title, content=content)
         storage.add_note(note)
-        console.print(f"[bold blue]✅ Заметка успешно добавлена![/bold blue] (ID: {note.id[:8]})")
+        console.print(f"[bold blue]✅ Заметка сохранена![/bold blue] (ID: {note.id[:8]})")
 
     elif args.command == "list":
         if args.query:
             notes = storage.filter_notes(args.query)
-            console.print(f"[bold blue]🔍 Результаты поиска по '{args.query}':[/bold blue]")
+            console.print(f"[bold blue]🔍 Результаты поиска по запросу '{args.query}':[/bold blue]")
         else:
             notes = storage.get_all_notes()
+        
         print_notes_table(notes)
 
     elif args.command == "edit":
-        # Если ID не передан, показываем список и просим ввести ID
+        # Если ID нет, даем выбрать из списка
         if not args.id:
-            print_notes_table(storage.get_all_notes())
-            args.id = Prompt.ask("[bold orange1]Введите ID заметки для редактирования[/bold orange1]")
+            notes = storage.get_all_notes()
+            if not notes:
+                console.print("[yellow]📭 Нет заметок для редактирования.[/yellow]")
+                sys.exit(0)
+            
+            args.id = select_note_interactive(notes)
+            if not args.id: # Если пользователь отменил выбор
+                return
 
-        # Проверяем существование заметки сразу
-        note = storage.get_note_by_id(args.id)  # Предполагаем, что такой метод существует в Storage; если нет, добавьте его
+        note = storage.get_note_by_id(args.id)
         if not note:
             console.print(f"[bold red]❌ Заметка с ID {args.id} не найдена.[/bold red]")
             sys.exit(1)
@@ -90,40 +111,40 @@ def main():
         new_title = args.title
         new_content = args.msg
 
-        # Если пользователь не передал ни заголовка, ни текста флагами, спрашиваем, что менять
+        # Если данные для обновления не переданы, спрашиваем, подставляя старые значения
         if not new_title and not new_content:
-            console.print("[dim]Оставьте пустым, чтобы сохранить текущее значение[/dim]")
-            new_title = Prompt.ask("Новый заголовок", default=note.title)
-            new_content = Prompt.ask("Новое содержание", default=note.content)
+            console.print(f"[dim]Редактирование: {note.title}[/dim]")
+            new_title = Prompt.ask("Заголовок", default=note.title)
+            new_content = Prompt.ask("Содержание", default=note.content)
 
         success = storage.edit_note(args.id, new_title, new_content)
         if success:
             console.print(f"[bold green]✏️  Заметка обновлена![/bold green]")
-        else:
-            console.print(f"[bold red]❌ Заметка с ID {args.id} не найдена.[/bold red]")
-            sys.exit(1)
 
     elif args.command == "delete":
+        # Если ID нет, даем выбрать
         if not args.id:
-            print_notes_table(storage.get_all_notes())
-            args.id = Prompt.ask("[bold red]Введите ID заметки для удаления[/bold red]")
+            notes = storage.get_all_notes()
+            if not notes:
+                console.print("[yellow]📭 Нет заметок для удаления.[/yellow]")
+                sys.exit(0)
 
-        # Проверяем существование заметки сразу
-        note = storage.get_note_by_id(args.id)  # Предполагаем, что такой метод существует в Storage; если нет, добавьте его
-        if not note:
-            console.print(f"[bold red]❌ Заметка с ID {args.id} не найдена.[/bold red]")
-            sys.exit(1)
+            args.id = select_note_interactive(notes)
+            if not args.id:
+                return
 
-        success = storage.delete_note(args.id)
-        if success:
-            console.print(f"[bold red]🗑️ Заметка удалена.[/bold red]")
+        # Подтверждение удаления
+        if questionary.confirm(f"Вы уверены, что хотите удалить заметку {args.id[:8]}?").ask():
+            success = storage.delete_note(args.id)
+            if success:
+                console.print(f"[bold red]🗑️  Заметка удалена.[/bold red]")
+            else:
+                console.print(f"[bold red]❌ Ошибка: заметка не найдена.[/bold red]")
         else:
-            console.print(f"[bold red]❌ Заметка с ID {args.id} не найдена.[/bold red]")
-            sys.exit(1)
+            console.print("[dim]Удаление отменено.[/dim]")
 
     else:
         parser.print_help()
-
 
 if __name__ == "__main__":
     main()
